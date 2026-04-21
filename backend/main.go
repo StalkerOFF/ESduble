@@ -36,6 +36,23 @@ type SandList struct {
 	UpdatedAt  time.Time       `json:"updated_at"`
 }
 
+type EmployeeCredential struct {
+	ID              uuid.UUID  `json:"id"`
+	SandListID      uuid.UUID  `json:"sand_list_id"`
+	EmployeeName    string     `json:"employee_name"`
+	Login           string     `json:"login,omitempty"`
+	Password        string     `json:"password,omitempty"`
+	InternalNumber  string     `json:"internal_number,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+}
+
+type CredentialRequest struct {
+	Login          string `json:"login"`
+	Password       string `json:"password"`
+	InternalNumber string `json:"internal_number"`
+}
+
 type User struct {
 	ID           uuid.UUID  `json:"id"`
 	Username     string     `json:"username"`
@@ -371,6 +388,146 @@ func updateCheckboxesHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// Credential handlers
+func getCredentialsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract listId and employeeName from path: /api/credentials/{listId}/{employeeName}
+	path := strings.TrimPrefix(r.URL.Path, "/api/credentials/")
+	parts := strings.Split(path, "/")
+	if len(parts) != 2 {
+		http.Error(w, "Invalid path", http.StatusBadRequest)
+		return
+	}
+
+	listId, err := uuid.Parse(parts[0])
+	if err != nil {
+		http.Error(w, "Invalid list ID", http.StatusBadRequest)
+		return
+	}
+
+	employeeName := parts[1]
+
+	query := `SELECT id, sand_list_id, employee_name, login, password, internal_number, created_at, updated_at 
+              FROM employee_credentials WHERE sand_list_id = $1 AND employee_name = $2`
+
+	var cred EmployeeCredential
+	err = db.QueryRow(query, listId, employeeName).Scan(
+		&cred.ID, &cred.SandListID, &cred.EmployeeName, 
+		&cred.Login, &cred.Password, &cred.InternalNumber,
+		&cred.CreatedAt, &cred.UpdatedAt)
+	
+	if err == sql.ErrNoRows {
+		// Return empty credential if not found
+		cred = EmployeeCredential{
+			SandListID:   listId,
+			EmployeeName: employeeName,
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(cred)
+		return
+	}
+	if err != nil {
+		log.Printf("Query credentials error: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(cred)
+}
+
+func saveCredentialsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodPut {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract listId and employeeName from path: /api/credentials/{listId}/{employeeName}
+	path := strings.TrimPrefix(r.URL.Path, "/api/credentials/")
+	parts := strings.Split(path, "/")
+	if len(parts) != 2 {
+		http.Error(w, "Invalid path", http.StatusBadRequest)
+		return
+	}
+
+	listId, err := uuid.Parse(parts[0])
+	if err != nil {
+		http.Error(w, "Invalid list ID", http.StatusBadRequest)
+		return
+	}
+
+	employeeName := parts[1]
+
+	var req CredentialRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Check if credential exists
+	checkQuery := `SELECT id FROM employee_credentials WHERE sand_list_id = $1 AND employee_name = $2`
+	var existingId uuid.UUID
+	err = db.QueryRow(checkQuery, listId, employeeName).Scan(&existingId)
+
+	var result EmployeeCredential
+	if err == sql.ErrNoRows {
+		// Insert new credential
+		insertQuery := `INSERT INTO employee_credentials (sand_list_id, employee_name, login, password, internal_number, created_at, updated_at) 
+		                VALUES ($1, $2, $3, $4, $5, NOW(), NOW()) 
+		                RETURNING id, sand_list_id, employee_name, login, password, internal_number, created_at, updated_at`
+		err = db.QueryRow(insertQuery, listId, employeeName, req.Login, req.Password, req.InternalNumber).Scan(
+			&result.ID, &result.SandListID, &result.EmployeeName,
+			&result.Login, &result.Password, &result.InternalNumber,
+			&result.CreatedAt, &result.UpdatedAt)
+	} else if err != nil {
+		log.Printf("Check credentials error: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	} else {
+		// Update existing credential
+		updateQuery := `UPDATE employee_credentials SET login = $1, password = $2, internal_number = $3, updated_at = NOW() 
+		                WHERE sand_list_id = $4 AND employee_name = $5 
+		                RETURNING id, sand_list_id, employee_name, login, password, internal_number, created_at, updated_at`
+		err = db.QueryRow(updateQuery, req.Login, req.Password, req.InternalNumber, listId, employeeName).Scan(
+			&result.ID, &result.SandListID, &result.EmployeeName,
+			&result.Login, &result.Password, &result.InternalNumber,
+			&result.CreatedAt, &result.UpdatedAt)
+	}
+
+	if err != nil {
+		log.Printf("Save credentials error: %v", err)
+		http.Error(w, "Failed to save credentials", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(result)
+}
+
+func credentialsRouter(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
+
+	// Handle /api/credentials/{listId}/{employeeName}
+	if strings.HasPrefix(path, "/api/credentials/") {
+		switch r.Method {
+		case http.MethodGet:
+			getCredentialsHandler(w, r)
+		case http.MethodPost, http.MethodPut:
+			saveCredentialsHandler(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+		return
+	}
+
+	http.Error(w, "Not found", http.StatusNotFound)
+}
+
 func sandListsRouter(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 
@@ -412,6 +569,7 @@ func main() {
 	http.HandleFunc("/api/login", loginHandler)
 	http.HandleFunc("/api/sand-lists", authMiddleware(sandListsRouter))
 	http.HandleFunc("/api/sand-lists/", authMiddleware(sandListsRouter))
+	http.HandleFunc("/api/credentials/", authMiddleware(credentialsRouter))
 
 	port := os.Getenv("PORT")
 	if port == "" {

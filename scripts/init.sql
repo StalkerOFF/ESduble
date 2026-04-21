@@ -38,12 +38,27 @@ CREATE TABLE IF NOT EXISTS user_sessions (
     expires_at TIMESTAMP WITH TIME ZONE NOT NULL
 );
 
+-- Create employee_credentials table for storing login, password and internal number
+CREATE TABLE IF NOT EXISTS employee_credentials (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    sand_list_id UUID NOT NULL REFERENCES sand_lists(id) ON DELETE CASCADE,
+    employee_name VARCHAR(255) NOT NULL,
+    login VARCHAR(100),
+    password VARCHAR(255),
+    internal_number VARCHAR(50),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(sand_list_id, employee_name)
+);
+
 -- Create indexes
 CREATE INDEX IF NOT EXISTS idx_app_users_username ON app_users(username);
 CREATE INDEX IF NOT EXISTS idx_app_users_is_active ON app_users(is_active);
 CREATE INDEX IF NOT EXISTS idx_sand_lists_created_at ON sand_lists(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_user_sessions_token ON user_sessions(token);
 CREATE INDEX IF NOT EXISTS idx_user_sessions_expires_at ON user_sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_employee_credentials_sand_list_id ON employee_credentials(sand_list_id);
+CREATE INDEX IF NOT EXISTS idx_employee_credentials_employee_name ON employee_credentials(employee_name);
 
 -- Insert default users (passwords are hashed with SHA256)
 -- Stalker: 16084636

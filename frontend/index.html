@@ -275,6 +275,118 @@
             flex: 1;
         }
 
+        /* Credential Dropdown Styles */
+        .credential-toggle {
+            background: rgba(60, 60, 60, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #ccc;
+            padding: 6px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .credential-toggle:hover {
+            background: rgba(80, 80, 80, 0.7);
+            color: #fff;
+            border-color: #4a9eff;
+        }
+
+        .credential-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(30, 30, 30, 0.95);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 12px;
+            padding: 15px;
+            z-index: 100;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            min-width: 250px;
+            margin-top: 8px;
+        }
+
+        .credential-dropdown.active {
+            display: block;
+        }
+
+        .credential-form {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .credential-input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .credential-input-label {
+            font-size: 11px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .credential-input {
+            background: rgba(40, 40, 40, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            padding: 8px 10px;
+            color: #fff;
+            font-size: 13px;
+            transition: all 0.3s ease;
+        }
+
+        .credential-input:focus {
+            outline: none;
+            border-color: #4a9eff;
+            background: rgba(50, 50, 50, 0.7);
+        }
+
+        .credential-save-btn {
+            background: linear-gradient(135deg, #4a9eff 0%, #2d7dd2 100%);
+            border: none;
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            margin-top: 4px;
+        }
+
+        .credential-save-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(74, 158, 255, 0.3);
+        }
+
+        .credential-status {
+            font-size: 11px;
+            color: #4aff9e;
+            text-align: center;
+            margin-top: 8px;
+            display: none;
+        }
+
+        .credential-status.visible {
+            display: block;
+        }
+
+        .td-credential-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+
         /* Modal Styles */
         .modal-overlay {
             position: fixed;
@@ -723,11 +835,13 @@
                                 <tr>
                                     <th style="min-width: 200px;">Сотрудник</th>
                                     ${displayColumns.map(col => `<th>${col}</th>`).join('')}
+                                    <th>Учетные данные</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 ${names.map(name => {
                                     const nameCheckboxes = checkboxes[name] || {};
+                                    const credCellId = `cred-${list.id}-${name.replace(/\s+/g, '-')}`;
                                     return `
                                         <tr>
                                             <td>${name}</td>
@@ -745,6 +859,31 @@
                                                     </td>
                                                 `;
                                             }).join('')}
+                                            <td>
+                                                <div class="td-credential-wrapper">
+                                                    <button class="credential-toggle" onclick="toggleCredentialDropdown('${credCellId}')">
+                                                        🔑 Данные
+                                                    </button>
+                                                    <div id="${credCellId}" class="credential-dropdown">
+                                                        <form class="credential-form" onsubmit="saveCredentials(event, '${list.id}', '${name.replace(/'/g, "\\'")}')">
+                                                            <div class="credential-input-group">
+                                                                <label class="credential-input-label">Логин</label>
+                                                                <input type="text" class="credential-input" id="login-${credCellId}" placeholder="Введите логин">
+                                                            </div>
+                                                            <div class="credential-input-group">
+                                                                <label class="credential-input-label">Пароль</label>
+                                                                <input type="password" class="credential-input" id="password-${credCellId}" placeholder="Введите пароль">
+                                                            </div>
+                                                            <div class="credential-input-group">
+                                                                <label class="credential-input-label">Внутренний номер</label>
+                                                                <input type="text" class="credential-input" id="internal-${credCellId}" placeholder="Введите номер">
+                                                            </div>
+                                                            <button type="submit" class="credential-save-btn">Сохранить</button>
+                                                            <div id="status-${credCellId}" class="credential-status">✓ Сохранено</div>
+                                                        </form>
+                                                    </div>
+                                                </div>
+                                            </td>
                                         </tr>
                                     `;
                                 }).join('')}
@@ -802,6 +941,106 @@
                 console.error('Error updating checkbox:', error);
             }
         }
+
+        // Toggle credential dropdown visibility
+        function toggleCredentialDropdown(dropdownId) {
+            const dropdown = document.getElementById(dropdownId);
+            const allDropdowns = document.querySelectorAll('.credential-dropdown');
+            
+            // Close all other dropdowns
+            allDropdowns.forEach(d => {
+                if (d.id !== dropdownId) {
+                    d.classList.remove('active');
+                }
+            });
+            
+            // Toggle current dropdown
+            dropdown.classList.toggle('active');
+            
+            // If opening, load existing credentials
+            if (dropdown.classList.contains('active')) {
+                const button = dropdown.previousElementSibling;
+                const row = button.closest('tr');
+                const employeeName = row.cells[0].textContent.trim();
+                const listId = dropdownId.match(/cred-([^-]+)-/)[1];
+                loadCredentials(listId, employeeName, dropdownId);
+            }
+        }
+
+        // Load credentials for an employee
+        async function loadCredentials(listId, employeeName, dropdownId) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/credentials/${listId}/${encodeURIComponent(employeeName)}`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${currentUser.token}`
+                    }
+                });
+                
+                if (!response.ok && response.status !== 200) {
+                    return;
+                }
+                
+                const cred = await response.json();
+                
+                // Fill in the form fields
+                const loginInput = document.getElementById(`login-${dropdownId}`);
+                const passwordInput = document.getElementById(`password-${dropdownId}`);
+                const internalInput = document.getElementById(`internal-${dropdownId}`);
+                
+                if (cred.login) loginInput.value = cred.login;
+                if (cred.password) passwordInput.value = cred.password;
+                if (cred.internal_number) internalInput.value = cred.internal_number;
+            } catch (error) {
+                console.error('Error loading credentials:', error);
+            }
+        }
+
+        // Save credentials for an employee
+        async function saveCredentials(event, listId, employeeName) {
+            event.preventDefault();
+            
+            const credCellId = `cred-${listId}-${employeeName.replace(/\s+/g, '-')}`;
+            const login = document.getElementById(`login-${credCellId}`).value;
+            const password = document.getElementById(`password-${credCellId}`).value;
+            const internalNumber = document.getElementById(`internal-${credCellId}`).value;
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/credentials/${listId}/${encodeURIComponent(employeeName)}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${currentUser.token}`
+                    },
+                    body: JSON.stringify({
+                        login: login,
+                        password: password,
+                        internal_number: internalNumber
+                    })
+                });
+                
+                if (!response.ok) throw new Error('Failed to save credentials');
+                
+                // Show success status
+                const statusEl = document.getElementById(`status-${credCellId}`);
+                statusEl.classList.add('visible');
+                setTimeout(() => {
+                    statusEl.classList.remove('visible');
+                    document.getElementById(credCellId).classList.remove('active');
+                }, 1500);
+            } catch (error) {
+                console.error('Error saving credentials:', error);
+                alert('Ошибка сохранения данных');
+            }
+        }
+
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', function(event) {
+            if (!event.target.closest('.td-credential-wrapper')) {
+                const allDropdowns = document.querySelectorAll('.credential-dropdown');
+                allDropdowns.forEach(d => d.classList.remove('active'));
+            }
+        });
 
         async function quickCheckAll(listId) {
             try {

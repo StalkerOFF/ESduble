@@ -2,20 +2,20 @@ FROM golang:1.21-alpine AS builder
 
 WORKDIR /app
 
-# Копируем только go.mod для кэширования
+# Copy go.mod and go.sum for dependency caching
 COPY go.mod ./
 
-# Загружаем зависимости с флагом -mod=mod (авто-обновление go.sum)
+# Download dependencies
 ENV GOFLAGS=-mod=mod
 RUN go mod download
 
-# Копируем исходники ПОСЛЕ загрузки зависимостей
-COPY . .
+# Copy source code
+COPY backend/main.go ./main.go
 
-# Собираем с тем же флагом -mod=mod, чтобы Go сам подтянул go.sum при необходимости
+# Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -mod=mod -a -installsuffix cgo -o main .
 
-# Минимальный финальный образ
+# Minimal final image
 FROM alpine:latest
 RUN apk --no-cache add ca-certificates tzdata
 WORKDIR /root/
