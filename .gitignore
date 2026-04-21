@@ -1,0 +1,46 @@
+```
+# Environment variables
+.env
+
+# Dependencies
+go.mod
+go.sum
+
+# Logs and temporary files
+*.log
+*.tmp
+
+# Editor/IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Coverage reports
+coverage/
+htmlcov/
+.coverage
+
+# Build artifacts
+dist/
+build/
+target/
+
+# Virtual environments
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Node.js
+node_modules/
+
+# Gradle
+.gradle/
+```
